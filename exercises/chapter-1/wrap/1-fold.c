@@ -4,9 +4,10 @@
 /* Write to the specified `out` file all characters from the specified `in`
  * file with the addition of line feeds such that a line feed appears no later
  * than at the specified one-based `break_column` column for each output line.
+ * Return zero on success, or a nonzero value if an error occurs.
  * The behavior is undefined unless `break_column >= 2`. 
  */
-static void fold(FILE *out, FILE *in, int break_column);
+static int fold(FILE *out, FILE *in, int break_column);
 
 /* Interpret the specified command line `args`, which contain the specified
  * `num_args` number of elements.  `args` should not include the program name.
@@ -37,8 +38,7 @@ int main(int argc, char **argv) {
   if (rc) {
     return rc > 0;
   }
-  fold(stdout, stdin, break_column);
-  return 0;
+  return fold(stdout, stdin, break_column);
 }
 
 int strequal(const char *left, const char *right) {
@@ -92,25 +92,35 @@ void print_usage(FILE *out) {
    fputs(usage, out); 
 }
 
-void fold(FILE *out, FILE *in, int break_column) {
+int fold(FILE *out, FILE *in, int break_column) {
+  // macro that wraps `putc` and its error handling
+#define PUTC(CHAR, OUT_FILE) \
+  do { \
+    if (EOF == putc(CHAR, OUT_FILE) && ferror(OUT_FILE)) { \
+      return 1; \
+    } \
+  } while (0)
+  
   int column = 0;
   int ch;  /* the most recently read character */
   for (;;) {
     ch = getc(in);
     if (ch == EOF) {
-      return;
+      return !feof(in);
     }
     ++column;
 
     if (column == break_column && ch != '\n') {
-      putc('\n', out);
-      putc(ch, out);
+      PUTC('\n', out);
+      PUTC(ch, out);
       column = 1;
     } else if (ch == '\n') {
-      putc(ch, out);
+      PUTC(ch, out);
       column = 0;
     } else {
-      putc(ch, out);
+      PUTC(ch, out);
     }
   }
+
+#undef PUTC
 }
